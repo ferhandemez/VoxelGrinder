@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voxel Grinder · Seviye editörü</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9ebf7; --panel:#f7f8ff; --field:#ffffff; --text:#1d2150; --muted:#646a9a;
+  --line:#cfd5f5; --accent:#4f5bd5; --accent-ink:#ffffff; --stage:#d7dbf1; --glow:rgba(79,91,213,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161937; --panel:#1c2046; --field:#252a5a; --text:#e9ebff; --muted:#9aa1d6;
+    --line:#363d7c; --accent:#9eabff; --accent-ink:#161937; --stage:#11132b; --glow:rgba(158,171,255,.2);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161937; --panel:#1c2046; --field:#252a5a; --text:#e9ebff; --muted:#9aa1d6;
+  --line:#363d7c; --accent:#9eabff; --accent-ink:#161937; --stage:#11132b; --glow:rgba(158,171,255,.2);
+}
+:root{ box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+html{ height:100%; scroll-padding-top:env(safe-area-inset-top,0px); }
+body{ height:100%; margin:0; background:var(--bg); color:var(--text);
+  font-family:'Rubik',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; font-size:14px; line-height:1.4; }
+#app{ display:grid; grid-template-columns:340px minmax(0,1fr); height:100%; }
+
+/* ---------- Editor ---------- */
+#editor{ background:var(--panel); border-right:1.5px solid var(--line); overflow-y:auto; padding:22px 20px 32px; }
+.brand h1{ margin:0; font-size:22px; font-weight:800; letter-spacing:-.01em; }
+.brand p{ margin:2px 0 0; color:var(--muted); }
+.actions{ display:flex; gap:8px; margin:16px 0 4px; flex-wrap:wrap; }
+button{ font:inherit; font-weight:500; border-radius:999px; border:1.5px solid var(--line); background:var(--field);
+  color:var(--text); padding:8px 15px; cursor:pointer; }
+button:hover{ border-color:var(--accent); }
+button.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.sec{ margin-top:22px; }
+.sec h2{ font-size:15px; font-weight:700; margin:0 0 10px; }
+.ctl{ display:grid; grid-template-columns:1fr auto; align-items:center; gap:4px 10px; margin:9px 0; }
+.ctl .lab{ color:var(--muted); }
+.ctl output{ font-variant-numeric:tabular-nums; font-weight:500; }
+.ctl input[type=range]{ grid-column:1 / -1; width:100%; accent-color:var(--accent); margin:2px 0 0; }
+select,input[type=number],input[type=text],textarea{ font:inherit; color:var(--text); background:var(--field);
+  border:1.5px solid var(--line); border-radius:10px; padding:6px 9px; }
+select{ min-width:150px; }
+input[type=color]{ width:44px; height:28px; padding:0; border:1.5px solid var(--line); border-radius:8px; background:none; cursor:pointer; }
+input[type=color]::-webkit-color-swatch-wrapper{ padding:2px; } input[type=color]::-webkit-color-swatch{ border:0; border-radius:5px; }
+.seed{ display:flex; gap:6px; } .seed input{ width:96px; } .seed button{ padding:6px 10px; }
+.check{ display:flex; align-items:center; gap:8px; margin:10px 0; color:var(--muted); cursor:pointer; }
+.check input{ accent-color:var(--accent); width:16px; height:16px; }
+.layer{ display:grid; grid-template-columns:44px 1fr 62px 30px; gap:6px; align-items:center; margin:6px 0; }
+.layer input[type=text]{ min-width:0; } .layer input[type=number]{ width:62px; }
+.layer button{ padding:4px 0; border-radius:8px; }
+.note{ color:var(--muted); font-size:12.5px; margin:6px 0 0; }
+textarea{ width:100%; height:110px; resize:vertical; font-size:12px; }
+#stats{ display:grid; grid-template-columns:1fr auto; gap:3px 12px; font-variant-numeric:tabular-nums; }
+#stats span:nth-child(odd){ color:var(--muted); }
+
+/* ---------- Stage ---------- */
+#stage{ position:relative; display:flex; align-items:center; justify-content:center; background:var(--stage);
+  min-width:0; min-height:0; overflow:hidden; }
+#game{ position:relative; border-radius:22px; overflow:hidden; background:#31357a;
+  box-shadow:0 0 0 1.5px var(--line), 0 24px 60px rgba(14,16,50,.35); }
+#game canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+#fx{ touch-action:none; cursor:grab; }
+#hint{ position:absolute; top:12px; left:0; right:0; text-align:center; color:rgba(225,230,255,.7); font-size:12.5px;
+  pointer-events:none; }
+#win{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(25,28,70,.45); }
+#win[hidden]{ display:none; }
+#win .card{ background:#f4f6ff; color:#1d2150; border-radius:22px; padding:22px 26px; text-align:center;
+  box-shadow:0 0 0 4px #c7cfff; }
+#win b{ display:block; font-size:22px; font-weight:800; margin-bottom:12px; }
+
+@media (max-width:820px){
+  body{ height:auto; }
+  #app{ grid-template-columns:1fr; grid-template-rows:82svh auto; height:auto; }
+  #stage{ order:-1; }
+  #editor{ border-right:0; border-top:1.5px solid var(--line); overflow:visible; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="editor" aria-label="Seviye editörü">
+    <div class="brand"><h1>Voxel Grinder</h1><p>Şekli düzenle, sağda anında oyna.</p></div>
+    <div class="actions">
+      <button id="btnRestart" class="primary">Yeniden başlat</button>
+      <button id="btnDefaults">Varsayılana dön</button>
+    </div>
+    <div id="controls"></div>
+    <section class="sec">
+      <h2>Seviye verisi</h2>
+      <textarea id="json" spellcheck="false" aria-label="Seviye JSON"></textarea>
+      <div class="actions"><button id="btnExport">JSON'u kopyala</button><button id="btnImport">JSON'u yükle</button></div>
+      <p class="note" id="jsonNote">Ayarlar bu tarayıcıda otomatik saklanır.</p>
+    </section>
+    <section class="sec">
+      <h2>Performans</h2>
+      <div id="stats"></div>
+    </section>
+  </aside>
+  <main id="stage">
+    <div id="game">
+      <canvas id="bg"></canvas>
+      <canvas id="gl"></canvas>
+      <canvas id="fx"></canvas>
+      <div id="hint">Sürükleyerek döndür, dokunarak dök</div>
+      <div id="win" hidden><div class="card"><b>Seviye tamamlandı!</b><button id="btnAgain" class="primary">Tekrar oyna</button></div></div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+
+/* =========================================================
+   Sabitler — oyun mantığı 900x1600 mantıksal koordinatta (y aşağı)
+   ========================================================= */
+const LW = 900, LH = 1600;
+const GLOBE = { x: 450, y: 440, R: 285 };
+const WL = 40, WR = 860, WBOT = 880, TL = 330, TR = 570, FLOOR = 1070;
+const GEAR_Y = 1100, GEAR_R = 46, GEAR_X = [373, 450, 527];
+const TB = { cx: 450, cy: 1352, a: 230, rc: 96, ht: 34 };
+const TUBE_TOP = TB.cy - TB.rc - TB.ht;
+const TUBE_CL_TOP = TB.cy - TB.rc;
+const PER = 4 * TB.a + 2 * Math.PI * TB.rc;
+const SAND_Y0 = 1080, SAND_S = 1.6, SW = Math.ceil(LW / SAND_S), SH = Math.ceil((1500 - SAND_Y0) / SAND_S);
+const DT = 1 / 120, GRAV = 2600, MAXF = 4000, MAXG = 12000, MAXV = 22;
+const LUTN = 2048;
+const LSIN = new Float32Array(LUTN + 1), LCOS = new Float32Array(LUTN + 1);
+for (let i = 0; i <= LUTN; i++) { LSIN[i] = Math.sin(Math.PI * i / LUTN); LCOS[i] = Math.cos(Math.PI * i / LUTN); }
+
+/* =========================================================
+   Konfigürasyon
+   ========================================================= */
+const DEFAULT = {
+  shape: 'sphere', res: 30, seed: 2026, terrain: true,
+  freq: 1.5, deep: 0.4, sea: 0.5, mount: 0.66, ice: 0.84, biomeDepth: 1,
+  cDeep: '#1f5fd1', cShallow: '#38b0ff', cLand: '#33c43d', cMount: '#a3613c', cIce: '#eaf7ff',
+  layers: [
+    { n: 'Kabuk', c: '#8f5434', t: 2 },
+    { n: 'Manto', c: '#f5862b', t: 4 },
+    { n: 'Dış çekirdek', c: '#ffcf3d', t: 3 },
+    { n: 'İç çekirdek', c: '#ff4d6a', t: 99 }
+  ],
+  fillMode: 'surface', maxCluster: 400, grindRate: 140, grainsPerVoxel: 6,
+  maxGrains: 30000, beltSpeed: 150, autoRotate: 0.25
+};
+const LS_KEY = 'voxelGrinder.cfg.v1';
+const clone = o => JSON.parse(JSON.stringify(o));
+function loadCfg() {
+  try { const s = localStorage.getItem(LS_KEY); if (s) return Object.assign(clone(DEFAULT), JSON.parse(s)); } catch (e) {}
+  return clone(DEFAULT);
+}
+function saveCfg() { try { localStorage.setItem(LS_KEY, JSON.stringify(cfg)); } catch (e) {} $('#json').value = JSON.stringify(cfg, null, 1); }
+let cfg = loadCfg();
+
+/* =========================================================
+   Three.js
+   ========================================================= */
+const glC = $('#gl'), bgC = $('#bg'), fxC = $('#fx'), stage = $('#stage'), game = $('#game');
+const renderer = new THREE.WebGLRenderer({ canvas: glC, antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const cam = new THREE.OrthographicCamera(-LW / 2, LW / 2, LH / 2, -LH / 2, -4000, 4000);
+cam.position.set(0, 0, 2000);
+scene.add(new THREE.HemisphereLight(0xe6ecff, 0x2c3170, 0.62));
+const sun = new THREE.DirectionalLight(0xffffff, 0.62); sun.position.set(-0.55, 0.75, 1); scene.add(sun);
+
+const globe = new THREE.Group();
+globe.position.set(0, LH / 2 - GLOBE.y, 0);
+globe.quaternion.setFromEuler(new THREE.Euler(0.38, 0, 0.22));
+scene.add(globe);
+
+function makeBevelTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, 64, 64);
+  const grd = g.createRadialGradient(32, 32, 12, 32, 32, 46);
+  grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,40,0.16)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(0,0,40,0.26)'; g.lineWidth = 4; g.strokeRect(2, 2, 60, 60);
+  g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(5, 59); g.lineTo(5, 5); g.lineTo(59, 5); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const voxMat = new THREE.MeshLambertMaterial({ map: makeBevelTex() });
+
+function makeInstanced(cap, parent) {
+  const m = new THREE.InstancedMesh(boxGeo, voxMat, cap);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+  m.instanceColor.setUsage(THREE.DynamicDrawUsage);
+  m.frustumCulled = false; m.count = 0; parent.add(m);
+  return m;
+}
+let gMesh = null;
+const fMesh = makeInstanced(MAXF, scene);
+
+const hoverBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.1, 1.1, 1.1)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false }));
+hoverBox.visible = false; hoverBox.renderOrder = 10; globe.add(hoverBox);
+
+/* =========================================================
+   Voxel verisi
+   ========================================================= */
+let N = 0, N2 = 0, TOT = 0, center = 0, vs = 10, rad = 5;
+let grid, slotOf, voxAt, mark, hoverMark, queue;
+let visCount = 0, totalSolid = 0, remaining = 0, ground = 0, stamp = 1, hoverStamp = 1;
+let OFF6 = [], OFF26 = [];
+let palRGB = new Float32Array(0);
+let gMatDirty = false, gColDirty = false;
+
+function hash3(x, y, z, s) {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(z | 0, 0x1b873593) ^ Math.imul(s | 0, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); h = Math.imul(h ^ (h >>> 12), 0x297a2d39); h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y, z, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  let fx = x - xi, fy = y - yi, fz = z - zi;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); fz = fz * fz * (3 - 2 * fz);
+  const a = hash3(xi, yi, zi, s), b = hash3(xi + 1, yi, zi, s), c = hash3(xi, yi + 1, zi, s), d = hash3(xi + 1, yi + 1, zi, s);
+  const e = hash3(xi, yi, zi + 1, s), f = hash3(xi + 1, yi, zi + 1, s), g = hash3(xi, yi + 1, zi + 1, s), h = hash3(xi + 1, yi + 1, zi + 1, s);
+  const x1 = a + (b - a) * fx, x2 = c + (d - c) * fx, x3 = e + (f - e) * fx, x4 = g + (h - g) * fx;
+  const y1 = x1 + (x2 - x1) * fy, y2 = x3 + (x4 - x3) * fy;
+  return y1 + (y2 - y1) * fz;
+}
+function heightAt(nx, ny, nz, fq, seed) {
+  let sum = 0, amp = 0.5, f = fq, norm = 0;
+  for (let o = 0; o < 5; o++) {
+    sum += amp * vnoise(nx * f + 17.3, ny * f - 4.1, nz * f + 9.7, seed + o * 131);
+    norm += amp; amp *= 0.5; f *= 2.07;
+  }
+  const h = sum / norm;
+  return Math.min(1, Math.max(0, (h - 0.5) * 2.3 + 0.5));
+}
+function biome(h, ny) {
+  if (Math.abs(ny) + (h - 0.5) * 0.25 > cfg.ice) return 4;
+  if (h < cfg.deep) return 0;
+  if (h < cfg.sea) return 1;
+  if (h < cfg.mount) return 2;
+  return 3;
+}
+function buildPalette() {
+  const cols = [cfg.cDeep, cfg.cShallow, cfg.cLand, cfg.cMount, cfg.cIce, ...cfg.layers.map(l => l.c)];
+  palRGB = new Float32Array(cols.length * 3);
+  const c = new THREE.Color();
+  cols.forEach((h, i) => { c.set(h); palRGB[i * 3] = c.r; palRGB[i * 3 + 1] = c.g; palRGB[i * 3 + 2] = c.b; });
+}
+
+function generate() {
+  const res = cfg.res | 0, pad = 3;
+  N = res + pad * 2; N2 = N * N; TOT = N2 * N; center = (N - 1) / 2;
+  grid = new Uint8Array(TOT); slotOf = new Int32Array(TOT).fill(-1);
+  mark = new Uint32Array(TOT); hoverMark = new Uint32Array(TOT); queue = new Int32Array(TOT);
+  stamp = 1; hoverStamp = 1; hoverActive = false; hoverList = null;
+  OFF6 = [1, -1, N, -N, N2, -N2];
+  OFF26 = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+    if (dx || dy || dz) OFF26.push(dx + dy * N + dz * N2);
+
+  const R = res / 2 - 0.5;
+  vs = (2 * GLOBE.R) / (res + (cfg.terrain ? 3 : 0));
+  rad = vs * 0.5 * 0.94;
+  buildPalette();
+
+  const shape = cfg.shape, bd = cfg.biomeDepth, terrain = cfg.terrain, seed = cfg.seed | 0, fq = cfg.freq;
+  const layers = cfg.layers, nl = layers.length;
+  let count = 0;
+  for (let z = 0; z < N; z++) {
+    const pz = z - center;
+    for (let y = 0; y < N; y++) {
+      const py = y - center;
+      let idx = (z * N + y) * N;
+      for (let x = 0; x < N; x++, idx++) {
+        const px = x - center;
+        const ax = Math.abs(px), ay = Math.abs(py), az = Math.abs(pz);
+        const l2 = Math.sqrt(px * px + py * py + pz * pz);
+        let d;
+        if (shape === 'cube') d = Math.max(ax, ay, az);
+        else if (shape === 'diamond') d = Math.max((ax + ay + az) / 1.45, Math.max(ax, ay, az));
+        else d = l2;
+        if (d > R + 2) continue;
+        let ci;
+        if (d > R - bd) {
+          const inv = l2 > 0 ? 1 / l2 : 0;
+          const h = heightAt(px * inv, py * inv, pz * inv, fq, seed);
+          ci = biome(h, py * inv);
+          let extra = 0;
+          if (terrain) { if (ci === 2) extra = 1; else if (ci === 3) extra = 2; else if (ci === 4 && h >= cfg.sea) extra = 1; }
+          if (d > R + extra) continue;
+        } else if (nl === 0) {
+          ci = 3;
+        } else {
+          const dd = R - d - bd; let acc = 0; ci = 5 + nl - 1;
+          for (let L = 0; L < nl; L++) { acc += layers[L].t; if (dd < acc) { ci = 5 + L; break; } }
+        }
+        grid[idx] = ci + 1; count++;
+      }
+    }
+  }
+  totalSolid = remaining = count; ground = 0; visCount = 0;
+
+  if (gMesh) { globe.remove(gMesh); if (gMesh.dispose) gMesh.dispose(); }
+  gMesh = makeInstanced(Math.max(1, count), globe);
+  voxAt = new Int32Array(Math.max(1, count));
+  for (let i = 0; i < TOT; i++) if (grid[i] && exposed(i)) addVisible(i);
+  gMatDirty = gColDirty = true;
+
+  resetDynamics();
+  setupPhysGrid();
+  hoverBox.scale.setScalar(vs);
+  won = false; $('#win').hidden = true;
+}
+
+function exposed(i) {
+  return !grid[i + 1] || !grid[i - 1] || !grid[i + N] || !grid[i - N] || !grid[i + N2] || !grid[i - N2];
+}
+function writeSlotColor(slot, i) {
+  const c = (grid[i] - 1) * 3, a = gMesh.instanceColor.array, o = slot * 3;
+  let r = palRGB[c], g = palRGB[c + 1], b = palRGB[c + 2];
+  if (hoverActive && hoverMark[i] === hoverStamp) { r += (1 - r) * 0.45; g += (1 - g) * 0.45; b += (1 - b) * 0.45; }
+  a[o] = r; a[o + 1] = g; a[o + 2] = b;
+}
+function addVisible(i) {
+  const slot = visCount++;
+  slotOf[i] = slot; voxAt[slot] = i;
+  const m = gMesh.instanceMatrix.array, o = slot * 16, s = vs * 0.985;
+  const x = i % N, y = ((i / N) | 0) % N, z = (i / N2) | 0;
+  m[o] = s; m[o + 5] = s; m[o + 10] = s; m[o + 15] = 1;
+  m[o + 12] = (x - center) * vs; m[o + 13] = (y - center) * vs; m[o + 14] = (z - center) * vs;
+  writeSlotColor(slot, i);
+}
+function removeVisible(i) {
+  const slot = slotOf[i], last = --visCount;
+  if (slot !== last) {
+    const j = voxAt[last]; voxAt[slot] = j; slotOf[j] = slot;
+    const m = gMesh.instanceMatrix.array, c = gMesh.instanceColor.array;
+    m.copyWithin(slot * 16, last * 16, last * 16 + 16);
+    c.copyWithin(slot * 3, last * 3, last * 3 + 3);
+  }
+  slotOf[i] = -1;
+}
+function recolor() {
+  buildPalette();
+  for (let s = 0; s < visCount; s++) writeSlotColor(s, voxAt[s]);
+  const a = fMesh.instanceColor.array;
+  for (let i = 0; i < fCount; i++) { const c = fCol[i] * 3; a[i * 3] = palRGB[c]; a[i * 3 + 1] = palRGB[c + 1]; a[i * 3 + 2] = palRGB[c + 2]; }
+  gColDirty = true; fColDirty = true;
+}
+
+/* Flood fill — yüzey modunda 26-komşuluk (basamaklı yüzeyler bağlı kalsın) */
+function bfs(start, mode, cap) {
+  if (++stamp >= 0xfffffff0) { mark.fill(0); stamp = 1; }
+  const col = grid[start], surf = mode === 'surface', offs = surf ? OFF26 : OFF6, no = offs.length;
+  let h = 0, t = 0;
+  queue[t++] = start; mark[start] = stamp;
+  outer:
+  while (h < t && t < cap) {
+    const i = queue[h++];
+    for (let k = 0; k < no; k++) {
+      const j = i + offs[k];
+      if (mark[j] === stamp || grid[j] !== col) continue;
+      if (surf && slotOf[j] < 0) continue;
+      mark[j] = stamp; queue[t++] = j;
+      if (t >= cap) break outer;
+    }
+  }
+  return t;
+}
+
+/* Voxel DDA raycast (Amanatides–Woo), grid lokal uzayında */
+const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _qi = new THREE.Quaternion(), _q1 = new THREE.Quaternion();
+function pick(lx, ly) {
+  if (!N) return -1;
+  _qi.copy(globe.quaternion).invert();
+  const gp = globe.position;
+  _v.set(lx - LW / 2 - gp.x, LH / 2 - ly - gp.y, 3000 - gp.z).applyQuaternion(_qi);
+  _d.set(0, 0, -1).applyQuaternion(_qi);
+  const o = [_v.x / vs + center + 0.5, _v.y / vs + center + 0.5, _v.z / vs + center + 0.5];
+  const d = [_d.x, _d.y, _d.z];
+  let t0 = -Infinity, t1 = Infinity;
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(d[a]) < 1e-9) { if (o[a] < 0 || o[a] > N) return -1; continue; }
+    let p = -o[a] / d[a], q = (N - o[a]) / d[a];
+    if (p > q) { const tmp = p; p = q; q = tmp; }
+    if (p > t0) t0 = p; if (q < t1) t1 = q;
+  }
+  if (t1 < t0 || t1 < 0) return -1;
+  const t = Math.max(t0, 0) + 1e-5;
+  const pos = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+  const ix = [0, 0, 0], st = [0, 0, 0], td = [0, 0, 0], tm = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    ix[a] = Math.min(N - 1, Math.max(0, Math.floor(pos[a])));
+    if (d[a] > 0) { st[a] = 1; td[a] = 1 / d[a]; tm[a] = (ix[a] + 1 - pos[a]) / d[a]; }
+    else if (d[a] < 0) { st[a] = -1; td[a] = -1 / d[a]; tm[a] = (pos[a] - ix[a]) / -d[a]; }
+    else { st[a] = 0; td[a] = Infinity; tm[a] = Infinity; }
+  }
+  for (let n = 0, lim = N * 3; n < lim; n++) {
+    const idx = (ix[2] * N + ix[1]) * N + ix[0];
+    if (grid[idx]) return idx;
+    const a = tm[0] < tm[1] ? (tm[0] < tm[2] ? 0 : 2) : (tm[1] < tm[2] ? 1 : 2);
+    ix[a] += st[a];
+    if (ix[a] < 0 || ix[a] >= N) return -1;
+    tm[a] += td[a];
+  }
+  return -1;
+}
+
+/* =========================================================
+   Düşen voxeller (Verlet + uniform grid çarpışma)
+   ========================================================= */
+const fX = new Float32Array(MAXF), fY = new Float32Array(MAXF), fOX = new Float32Array(MAXF), fOY = new Float32Array(MAXF);
+const fZ = new Float32Array(MAXF), fVZ = new Float32Array(MAXF), fDel = new Float32Array(MAXF);
+const fQ = new Float32Array(MAXF * 4), fW = new Float32Array(MAXF * 3);
+const fCol = new Uint8Array(MAXF), fCon = new Uint8Array(MAXF), fCell = new Int32Array(MAXF), fNext = new Int32Array(MAXF);
+let fCount = 0, fColDirty = false;
+let cell = 10, cols = 1, rows = 1, cellHead = new Int32Array(1);
+const GY0 = -900;
+let physAcc = 0;
+
+function setupPhysGrid() {
+  cell = Math.max(2, rad * 2);
+  cols = Math.ceil(LW / cell) + 2;
+  rows = Math.ceil((FLOOR + 80 - GY0) / cell) + 2;
+  cellHead = new Int32Array(cols * rows);
+}
+function spawnCube(wx, wy, wz, dx, dy, dz, ci, order, q) {
+  const i = fCount++;
+  const lx = wx + LW / 2, ly = LH / 2 - wy;
+  const sp = 120 + Math.random() * 160;
+  const vx = dx * sp + (Math.random() - 0.5) * 40, vy = -dy * sp - 90;
+  fX[i] = lx; fY[i] = ly; fOX[i] = lx - vx * DT; fOY[i] = ly - vy * DT;
+  fZ[i] = wz; fVZ[i] = dz * sp * 0.4;
+  fQ[i * 4] = q.x; fQ[i * 4 + 1] = q.y; fQ[i * 4 + 2] = q.z; fQ[i * 4 + 3] = q.w;
+  fW[i * 3] = (Math.random() - 0.5) * 9; fW[i * 3 + 1] = (Math.random() - 0.5) * 9; fW[i * 3 + 2] = (Math.random() - 0.5) * 9;
+  fDel[i] = Math.min(order * 0.0025, 0.45);
+  fCol[i] = ci; fCon[i] = 0;
+  const a = fMesh.instanceColor.array, c = ci * 3;
+  a[i * 3] = palRGB[c]; a[i * 3 + 1] = palRGB[c + 1]; a[i * 3 + 2] = palRGB[c + 2];
+  fColDirty = true;
+}
+function removeFall(i) {
+  const l = --fCount;
+  if (i !== l) {
+    fX[i] = fX[l]; fY[i] = fY[l]; fOX[i] = fOX[l]; fOY[i] = fOY[l]; fZ[i] = fZ[l]; fVZ[i] = fVZ[l];
+    fDel[i] = fDel[l]; fCol[i] = fCol[l]; fCon[i] = fCon[l];
+    fQ.copyWithin(i * 4, l * 4, l * 4 + 4); fW.copyWithin(i * 3, l * 3, l * 3 + 3);
+    fMesh.instanceColor.array.copyWithin(i * 3, l * 3, l * 3 + 3);
+    fColDirty = true;
+  }
+}
+
+const DIAG_LEN = Math.hypot(TL - WL, FLOOR - WBOT);
+const NLX = (FLOOR - WBOT) / DIAG_LEN, NLY = -(TL - WL) / DIAG_LEN;   // sol diyagonal iç normali
+const NRX = -NLX, NRY = NLY;                                         // sağ diyagonal iç normali
+function segPush(i, ax, ay, bx, by, nx, ny, r) {
+  const x = fX[i], y = fY[i];
+  const ex = bx - ax, ey = by - ay;
+  const t = ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey);
+  if (t < -0.02 || t > 1.02) return;
+  const sd = (x - ax) * nx + (y - ay) * ny;
+  if (sd < r && sd > -60) {
+    const p = r - sd;
+    fX[i] = x + nx * p; fY[i] = y + ny * p;
+    fOX[i] += (fX[i] - fOX[i]) * 0.04; fOY[i] += (fY[i] - fOY[i]) * 0.04;
+    fCon[i] = 1;
+  }
+}
+function physStep() {
+  const n = fCount; if (!n) return;
+  const r = rad, d2 = r * 2, dd = d2 * d2, g = GRAV * DT * DT;
+  for (let i = 0; i < n; i++) {
+    if (fDel[i] > 0) { fDel[i] -= DT; continue; }
+    let vx = (fX[i] - fOX[i]) * 0.999, vy = (fY[i] - fOY[i]) * 0.999;
+    const sp = vx * vx + vy * vy;
+    if (sp > MAXV * MAXV) { const s = MAXV / Math.sqrt(sp); vx *= s; vy *= s; }
+    fOX[i] = fX[i]; fOY[i] = fY[i];
+    fX[i] += vx; fY[i] += vy + g;
+    fZ[i] += fVZ[i] * DT; fVZ[i] *= 0.99;
+    fCon[i] = 0;
+  }
+  cellHead.fill(-1);
+  for (let i = 0; i < n; i++) {
+    if (fDel[i] > 0) { fCell[i] = -1; continue; }
+    let cx = (fX[i] / cell) | 0, cy = ((fY[i] - GY0) / cell) | 0;
+    if (cx < 0) cx = 0; else if (cx >= cols) cx = cols - 1;
+    if (cy < 0) cy = 0; else if (cy >= rows) cy = rows - 1;
+    const c = cy * cols + cx;
+    fCell[i] = c; fNext[i] = cellHead[c]; cellHead[c] = i;
+  }
+  for (let it = 0; it < 2; it++) {
+    for (let i = 0; i < n; i++) {
+      const c = fCell[i]; if (c < 0) continue;
+      const cx = c % cols, cy = (c / cols) | 0;
+      const y0 = cy > 0 ? cy - 1 : 0, y1 = cy < rows - 1 ? cy + 1 : cy;
+      const x0 = cx > 0 ? cx - 1 : 0, x1 = cx < cols - 1 ? cx + 1 : cx;
+      for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+        let j = cellHead[yy * cols + xx];
+        while (j !== -1) {
+          if (j > i) {
+            const dx = fX[j] - fX[i], dy = fY[j] - fY[i], q = dx * dx + dy * dy;
+            if (q < dd && q > 1e-6) {
+              const dist = Math.sqrt(q), push = (d2 - dist) * 0.5 / dist;
+              const px = dx * push, py = dy * push;
+              fX[i] -= px; fY[i] -= py; fX[j] += px; fY[j] += py;
+              fCon[i] = 1; fCon[j] = 1;
+            }
+          }
+          j = fNext[j];
+        }
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      if (fDel[i] > 0) continue;
+      if (fX[i] < WL + r) { fX[i] = WL + r; fCon[i] = 1; }
+      else if (fX[i] > WR - r) { fX[i] = WR - r; fCon[i] = 1; }
+      segPush(i, WL, WBOT, TL, FLOOR, NLX, NLY, r);
+      segPush(i, WR, WBOT, TR, FLOOR, NRX, NRY, r);
+      if (fX[i] > TL - r && fX[i] < TR + r && fY[i] > FLOOR - r) {
+        fY[i] = FLOOR - r; fOY[i] += (fY[i] - fOY[i]) * 0.3; fCon[i] = 1;
+      }
+    }
+  }
+}
+
+/* =========================================================
+   Öğütücü + kum
+   ========================================================= */
+const gX = new Float32Array(MAXG), gY = new Float32Array(MAXG), gVX = new Float32Array(MAXG), gVY = new Float32Array(MAXG), gTY = new Float32Array(MAXG);
+const gC = new Uint32Array(MAXG);
+let gCount = 0, grindBudget = 0, gearBoost = 0, gearAng = 0;
+let tS, tO, tC, tCap = 0, tHead = 0, tCount = 0, shift = 0;
+
+function allocSand(cap) { tCap = cap; tS = new Float32Array(cap); tO = new Float32Array(cap); tC = new Uint32Array(cap); tHead = 0; tCount = 0; }
+function addTube(x, off, col) {
+  let s = (x - (TB.cx - TB.a) - shift) % PER; if (s < 0) s += PER;
+  tS[tHead] = s; tO[tHead] = off; tC[tHead] = col;
+  tHead = (tHead + 1) % tCap; if (tCount < tCap) tCount++;
+}
+function grindCube(i) {
+  const c = fCol[i] * 3;
+  const br = palRGB[c] * 255, bg = palRGB[c + 1] * 255, bb = palRGB[c + 2] * 255;
+  const cx = fX[i], n = cfg.grainsPerVoxel;
+  for (let k = 0; k < n; k++) {
+    const v = 0.78 + Math.random() * 0.34;
+    const r = Math.min(255, br * v) | 0, g = Math.min(255, bg * v) | 0, b = Math.min(255, bb * v) | 0;
+    const col = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+    const x = Math.min(TR - 5, Math.max(TL + 5, cx + (Math.random() - 0.5) * rad * 2.2));
+    const off = (Math.random() * 2 - 1) * (TB.ht - 3);
+    if (gCount < MAXG) {
+      const j = gCount++;
+      gX[j] = x; gY[j] = GEAR_Y + 16 + Math.random() * 18;
+      gVX[j] = (Math.random() - 0.5) * 90; gVY[j] = 80 + Math.random() * 160;
+      gTY[j] = TUBE_CL_TOP - off; gC[j] = col;
+    } else addTube(x, off, col);
+  }
+  ground++;
+  gearBoost = Math.min(gearBoost + 0.35, 9);
+  removeFall(i);
+}
+function grindStep(dt) {
+  grindBudget = Math.min(grindBudget + cfg.grindRate * dt, Math.max(1, cfg.grindRate * 0.15));
+  const lim = FLOOR - rad * 2.4;
+  for (let i = fCount - 1; i >= 0; i--) {
+    if (fDel[i] > 0 || fY[i] < lim || fX[i] < TL || fX[i] > TR) continue;
+    if (grindBudget >= 1) { grindBudget -= 1; grindCube(i); }
+    else fX[i] += (Math.random() - 0.5) * 1.4;
+  }
+}
+function grainStep(dt) {
+  for (let i = 0; i < gCount;) {
+    const vy = gVY[i] + 1700 * dt;
+    let x = gX[i] + gVX[i] * dt; const y = gY[i] + vy * dt;
+    gVX[i] *= 0.985;
+    if (x < TL + 4) { x = TL + 4; gVX[i] = Math.abs(gVX[i]) * 0.3; }
+    else if (x > TR - 4) { x = TR - 4; gVX[i] = -Math.abs(gVX[i]) * 0.3; }
+    if (y >= gTY[i]) {
+      addTube(x, TUBE_CL_TOP - y, gC[i]);
+      const l = --gCount;
+      if (i !== l) { gX[i] = gX[l]; gY[i] = gY[l]; gVX[i] = gVX[l]; gVY[i] = gVY[l]; gTY[i] = gTY[l]; gC[i] = gC[l]; }
+      continue;
+    }
+    gX[i] = x; gY[i] = y; gVY[i] = vy; i++;
+  }
+}
+
+/* =========================================================
+   Oyuncu etkileşimi
+   ========================================================= */
+let hoverActive = false, hoverList = null, won = false;
+function clusterCap() {
+  const free = MAXF - fCount;
+  const c = cfg.maxCluster > 0 ? cfg.maxCluster : TOT;
+  return Math.max(0, Math.min(c, free));
+}
+function clearHover() {
+  if (!hoverActive) return;
+  hoverActive = false; hoverStamp++;
+  const L = hoverList;
+  for (let k = 0; k < L.length; k++) { const i = L[k], s = slotOf[i]; if (s >= 0) writeSlotColor(s, i); }
+  hoverList = null; gColDirty = true;
+}
+function setHover(vi) {
+  const cap = clusterCap(); if (cap < 1) return;
+  const n = bfs(vi, cfg.fillMode, cap);
+  hoverStamp++; hoverList = queue.slice(0, n);
+  for (let k = 0; k < n; k++) hoverMark[hoverList[k]] = hoverStamp;
+  hoverActive = true;
+  for (let k = 0; k < n; k++) { const i = hoverList[k], s = slotOf[i]; if (s >= 0) writeSlotColor(s, i); }
+  gColDirty = true;
+}
+function release(vi) {
+  const cap = clusterCap(); if (cap < 1) return;
+  clearHover();
+  const n = bfs(vi, cfg.fillMode, cap);
+  const q = globe.quaternion, gp = globe.position;
+  for (let k = 0; k < n; k++) {
+    const i = queue[k], ci = grid[i] - 1;
+    const x = i % N, y = ((i / N) | 0) % N, z = (i / N2) | 0;
+    _v.set((x - center) * vs, (y - center) * vs, (z - center) * vs).applyQuaternion(q);
+    const len = _v.length() || 1;
+    spawnCube(_v.x + gp.x, _v.y + gp.y, _v.z + gp.z, _v.x / len, _v.y / len, _v.z / len, ci, k, q);
+    grid[i] = 0;
+    if (slotOf[i] >= 0) removeVisible(i);
+  }
+  for (let k = 0; k < n; k++) {
+    const i = queue[k];
+    for (let o = 0; o < 6; o++) { const j = i + OFF6[o]; if (grid[j] && slotOf[j] < 0) addVisible(j); }
+  }
+  remaining -= n;
+  gMatDirty = gColDirty = true;
+}
+
+let pDown = false, dragging = false, moved = 0, lx = 0, ly = 0, pLX = 0, pLY = 0, pointerIn = false, lastMoveT = 0;
+let spinX = 0, spinY = 0, cursor = '';
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0);
+function rotateBy(ax, ay) {
+  _q1.setFromAxisAngle(AY, ax); globe.quaternion.premultiply(_q1);
+  _q1.setFromAxisAngle(AX, ay); globe.quaternion.premultiply(_q1);
+  globe.quaternion.normalize();
+}
+function toLogical(e) {
+  const r = fxC.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * LW, (e.clientY - r.top) / r.height * LH];
+}
+function setCursor(c) { if (c !== cursor) { cursor = c; fxC.style.cursor = c; } }
+fxC.addEventListener('pointerdown', e => {
+  fxC.setPointerCapture(e.pointerId);
+  pDown = true; dragging = false; moved = 0;
+  [lx, ly] = toLogical(e); pLX = lx; pLY = ly; pointerIn = true;
+  spinX = spinY = 0; lastMoveT = performance.now();
+});
+fxC.addEventListener('pointermove', e => {
+  const [x, y] = toLogical(e);
+  pLX = x; pLY = y; pointerIn = true;
+  if (!pDown) return;
+  const dx = x - lx, dy = y - ly;
+  moved += Math.abs(dx) + Math.abs(dy);
+  if (!dragging && moved > 12) { dragging = true; clearHover(); hoverBox.visible = false; setCursor('grabbing'); }
+  if (dragging) {
+    rotateBy(dx * 0.008, dy * 0.008);
+    const now = performance.now(), dts = Math.max(8, now - lastMoveT) / 1000;
+    spinX = spinX * 0.5 + (dx * 0.008 / dts) * 0.5; spinY = spinY * 0.5 + (dy * 0.008 / dts) * 0.5;
+    lastMoveT = now;
+  }
+  lx = x; ly = y;
+});
+fxC.addEventListener('pointerup', e => {
+  const [x, y] = toLogical(e);
+  if (pDown && !dragging) { const vi = pick(x, y); if (vi >= 0) release(vi); }
+  if (performance.now() - lastMoveT > 90) { spinX = spinY = 0; }
+  pDown = false; dragging = false;
+  if (e.pointerType !== 'mouse') pointerIn = false;
+});
+fxC.addEventListener('pointercancel', () => { pDown = false; dragging = false; pointerIn = false; });
+fxC.addEventListener('pointerleave', () => { if (!pDown) pointerIn = false; });
+
+function updateHover() {
+  if (!pointerIn || dragging || !N) { hoverBox.visible = false; clearHover(); return; }
+  const vi = pick(pLX, pLY);
+  if (vi < 0) { hoverBox.visible = false; clearHover(); setCursor(pDown ? 'grabbing' : 'grab'); return; }
+  const x = vi % N, y = ((vi / N) | 0) % N, z = (vi / N2) | 0;
+  hoverBox.position.set((x - center) * vs, (y - center) * vs, (z - center) * vs);
+  hoverBox.visible = true; setCursor('pointer');
+  if (hoverActive && hoverMark[vi] === hoverStamp) return;
+  clearHover(); setHover(vi);
+}
+
+/* =========================================================
+   2D katmanlar (arka plan, duvarlar, dişliler, kum)
+   ========================================================= */
+const bgX = bgC.getContext('2d'), fxX = fxC.getContext('2d');
+const staticC = document.createElement('canvas'), stX = staticC.getContext('2d');
+const gearC = document.createElement('canvas');
+const sandC = document.createElement('canvas'); sandC.width = SW; sandC.height = SH;
+const sandX = sandC.getContext('2d');
+const sandImg = sandX.createImageData(SW, SH);
+const sandU32 = new Uint32Array(sandImg.data.buffer);
+let k = 1, PR = 1;
+
+function stadium(ctx, r) {
+  const { cx, cy, a } = TB;
+  ctx.beginPath();
+  ctx.moveTo(cx - a, cy - r); ctx.lineTo(cx + a, cy - r);
+  ctx.arc(cx + a, cy, r, -Math.PI / 2, Math.PI / 2);
+  ctx.lineTo(cx - a, cy + r);
+  ctx.arc(cx - a, cy, r, Math.PI / 2, Math.PI * 1.5);
+  ctx.closePath();
+}
+function wallPath(ctx, side) {
+  const s = side < 0 ? 1 : -1;
+  const W = side < 0 ? WL : WR, T = side < 0 ? TL : TR;
+  ctx.moveTo(W, -30);
+  ctx.lineTo(W, WBOT - 34);
+  ctx.quadraticCurveTo(W, WBOT, W + s * 28, WBOT + 18);
+  ctx.lineTo(T - s * 16, FLOOR - 10);
+  ctx.quadraticCurveTo(T, FLOOR, T, FLOOR + 18);
+  ctx.lineTo(T, TUBE_TOP + 2);
+}
+function drawBackground() {
+  const c = bgX;
+  c.setTransform(k, 0, 0, k, 0, 0);
+  const grd = c.createLinearGradient(0, 0, 0, LH);
+  grd.addColorStop(0, '#2c3074'); grd.addColorStop(1, '#3a3f92');
+  c.fillStyle = grd; c.fillRect(0, 0, LW, LH);
+  c.fillStyle = '#242859';
+  c.beginPath(); wallPath(c, -1);
+  c.lineTo(TR, TUBE_TOP + 2); c.lineTo(TR, FLOOR + 18);
+  c.quadraticCurveTo(TR, FLOOR, TR + 16, FLOOR - 10);
+  c.lineTo(WR - 28, WBOT + 18); c.quadraticCurveTo(WR, WBOT, WR, WBOT - 34); c.lineTo(WR, -30);
+  c.closePath(); c.fill();
+  stadium(c, TB.rc + TB.ht); c.fill();
+  c.fillStyle = '#3a3f92'; stadium(c, TB.rc - TB.ht); c.fill();
+}
+function drawStatic() {
+  const c = stX;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, staticC.width, staticC.height);
+  c.setTransform(k, 0, 0, k, 0, 0);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const strokeGlass = () => {
+    c.shadowColor = 'rgba(150,170,255,.55)'; c.shadowBlur = 14 * k;
+    c.strokeStyle = '#b9c3ff'; c.lineWidth = 13; c.stroke();
+    c.shadowBlur = 0;
+    c.strokeStyle = '#f2f4ff'; c.lineWidth = 5; c.stroke();
+  };
+  stadium(c, TB.rc + TB.ht); strokeGlass();
+  c.save(); c.globalCompositeOperation = 'destination-out';
+  c.fillRect(TL + 2, TUBE_TOP - 14, TR - TL - 4, 28); c.restore();
+  stadium(c, TB.rc - TB.ht); strokeGlass();
+  c.beginPath(); wallPath(c, -1); strokeGlass();
+  c.beginPath(); wallPath(c, 1); strokeGlass();
+}
+function buildGearSprite() {
+  const size = Math.ceil((GEAR_R + 6) * 2 * k);
+  gearC.width = gearC.height = size;
+  const g = gearC.getContext('2d');
+  g.setTransform(k, 0, 0, k, size / 2, size / 2);
+  const teeth = 9, Ro = GEAR_R, Ri = GEAR_R * 0.7, step = Math.PI * 2 / teeth;
+  g.beginPath();
+  for (let t = 0; t < teeth; t++) {
+    const a = t * step;
+    g.lineTo(Math.cos(a) * Ri, Math.sin(a) * Ri);
+    g.lineTo(Math.cos(a + step * 0.62) * Ro, Math.sin(a + step * 0.62) * Ro);
+    g.lineTo(Math.cos(a + step * 0.78) * Ri * 0.98, Math.sin(a + step * 0.78) * Ri * 0.98);
+  }
+  g.closePath();
+  const rg = g.createRadialGradient(-10, -12, 4, 0, 0, Ro);
+  rg.addColorStop(0, '#ffffff'); rg.addColorStop(0.6, '#c9cfdd'); rg.addColorStop(1, '#8b93ab');
+  g.fillStyle = rg; g.fill();
+  g.strokeStyle = '#646c8a'; g.lineWidth = 2.2; g.stroke();
+  g.beginPath(); g.arc(0, 0, Ro * 0.4, 0, Math.PI * 2); g.fillStyle = '#e6e9f2'; g.fill(); g.strokeStyle = '#8890a8'; g.lineWidth = 3; g.stroke();
+  g.beginPath(); g.arc(0, 0, Ro * 0.19, 0, Math.PI * 2); g.fillStyle = '#454b75'; g.fill();
+}
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+function resize() {
+  const sw = stage.clientWidth - 28, sh = stage.clientHeight - 28;
+  let w = Math.floor(Math.max(180, Math.min(sw, sh * 9 / 16)));
+  const h = Math.round(w * 16 / 9);
+  game.style.width = w + 'px'; game.style.height = h + 'px';
+  PR = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(PR); renderer.setSize(w, h, false);
+  for (const c of [bgC, fxC, staticC]) { c.width = Math.round(w * PR); c.height = Math.round(h * PR); }
+  k = (w * PR) / LW;
+  drawBackground(); drawStatic(); buildGearSprite();
+}
+new ResizeObserver(resize).observe(stage);
+
+function draw2D() {
+  const c = fxX;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, fxC.width, fxC.height);
+
+  // Kum: tek ImageData'ya piksel yaz, sonra büyütüp çiz
+  sandU32.fill(0);
+  const inv = 1 / SAND_S;
+  for (let i = 0; i < gCount; i++) {
+    const ix = (gX[i] * inv) | 0, iy = ((gY[i] - SAND_Y0) * inv) | 0;
+    if (ix >= 0 && ix < SW && iy >= 0 && iy < SH) sandU32[iy * SW + ix] = gC[i];
+  }
+  const A2 = 2 * TB.a, ARC = Math.PI * TB.rc, cx = TB.cx, cy = TB.cy, a = TB.a, rc = TB.rc, x0 = cx - a, lutK = LUTN / ARC;
+  for (let i = 0; i < tCount; i++) {
+    let s = tS[i] + shift; if (s >= PER) s -= PER;
+    const off = tO[i]; let x, y;
+    if (s < A2) { x = x0 + s; y = cy - rc - off; }
+    else if ((s -= A2) < ARC) { const l = (s * lutK) | 0, rr = rc + off; x = cx + a + rr * LSIN[l]; y = cy - rr * LCOS[l]; }
+    else if ((s -= ARC) < A2) { x = cx + a - s; y = cy + rc + off; }
+    else { s -= A2; const l = Math.min(LUTN, (s * lutK) | 0), rr = rc + off; x = cx - a - rr * LSIN[l]; y = cy + rr * LCOS[l]; }
+    const ix = (x * inv) | 0, iy = ((y - SAND_Y0) * inv) | 0;
+    if (ix >= 0 && ix < SW && iy >= 0 && iy < SH) sandU32[iy * SW + ix] = tC[i];
+  }
+  sandX.putImageData(sandImg, 0, 0);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(sandC, 0, SAND_Y0 * k, SW * SAND_S * k, SH * SAND_S * k);
+
+  c.drawImage(staticC, 0, 0);
+
+  // Dişliler
+  const gs = gearC.width;
+  for (let i = 0; i < GEAR_X.length; i++) {
+    c.setTransform(1, 0, 0, 1, GEAR_X[i] * k, GEAR_Y * k);
+    c.rotate(i % 2 ? -gearAng : gearAng);
+    c.drawImage(gearC, -gs / 2, -gs / 2);
+  }
+
+  // İlerleme çubuğu
+  c.setTransform(k, 0, 0, k, 0, 0);
+  const pct = totalSolid ? ground / totalSolid : 0;
+  const bx = 232, by = 1331, bw = 436, bh = 42;
+  roundRect(c, bx, by, bw, bh, 21); c.fillStyle = 'rgba(26,29,74,.7)'; c.fill();
+  c.lineWidth = 5; c.strokeStyle = '#c7cfff'; c.stroke();
+  if (pct > 0) {
+    roundRect(c, bx + 6, by + 6, Math.max(30, (bw - 12) * pct), bh - 12, 15);
+    c.fillStyle = '#a9b8ff'; c.fill();
+  }
+  c.font = '800 30px Rubik, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  const txt = Math.floor(pct * 100) + '%';
+  c.lineWidth = 7; c.strokeStyle = '#2a2e6c'; c.strokeText(txt, LW / 2, by + bh / 2 + 1);
+  c.fillStyle = '#ffffff'; c.fillText(txt, LW / 2, by + bh / 2 + 1);
+}
+
+/* =========================================================
+   Döngü
+   ========================================================= */
+function updateFallingMatrices(dt) {
+  const m = fMesh.instanceMatrix.array, s = vs * 0.95;
+  for (let i = 0; i < fCount; i++) {
+    const qi = i * 4, wi = i * 3;
+    let wx = fW[wi], wy = fW[wi + 1], wz = fW[wi + 2];
+    if (fCon[i]) { wx *= 0.86; wy *= 0.86; wz *= 0.86; fW[wi] = wx; fW[wi + 1] = wy; fW[wi + 2] = wz; }
+    let x = fQ[qi], y = fQ[qi + 1], z = fQ[qi + 2], w = fQ[qi + 3];
+    if (fDel[i] <= 0) {
+      const hx = wx * dt * 0.5, hy = wy * dt * 0.5, hz = wz * dt * 0.5;
+      const nx = x + (hx * w + hy * z - hz * y), ny = y + (hy * w + hz * x - hx * z);
+      const nz = z + (hz * w + hx * y - hy * x), nw = w - (hx * x + hy * y + hz * z);
+      const il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz + nw * nw);
+      x = nx * il; y = ny * il; z = nz * il; w = nw * il;
+      fQ[qi] = x; fQ[qi + 1] = y; fQ[qi + 2] = z; fQ[qi + 3] = w;
+    }
+    const x2 = x + x, y2 = y + y, z2 = z + z;
+    const xx = x * x2, xy = x * y2, xz = x * z2, yy = y * y2, yz = y * z2, zz = z * z2, wx2 = w * x2, wy2 = w * y2, wz2 = w * z2;
+    const o = i * 16;
+    m[o] = (1 - (yy + zz)) * s; m[o + 1] = (xy + wz2) * s; m[o + 2] = (xz - wy2) * s; m[o + 3] = 0;
+    m[o + 4] = (xy - wz2) * s; m[o + 5] = (1 - (xx + zz)) * s; m[o + 6] = (yz + wx2) * s; m[o + 7] = 0;
+    m[o + 8] = (xz + wy2) * s; m[o + 9] = (yz - wx2) * s; m[o + 10] = (1 - (xx + yy)) * s; m[o + 11] = 0;
+    m[o + 12] = fX[i] - LW / 2; m[o + 13] = LH / 2 - fY[i]; m[o + 14] = fZ[i]; m[o + 15] = 1;
+  }
+  fMesh.count = fCount;
+  if (fCount) { fMesh.instanceMatrix.updateRange.offset = 0; fMesh.instanceMatrix.updateRange.count = fCount * 16; fMesh.instanceMatrix.needsUpdate = true; }
+  if (fColDirty && fCount) { fMesh.instanceColor.updateRange.offset = 0; fMesh.instanceColor.updateRange.count = fCount * 3; fMesh.instanceColor.needsUpdate = true; }
+  fColDirty = false;
+}
+function flushGlobe() {
+  gMesh.count = visCount;
+  if (gMatDirty) { gMesh.instanceMatrix.updateRange.offset = 0; gMesh.instanceMatrix.updateRange.count = Math.max(16, visCount * 16); gMesh.instanceMatrix.needsUpdate = true; }
+  if (gColDirty) { gMesh.instanceColor.updateRange.offset = 0; gMesh.instanceColor.updateRange.count = Math.max(3, visCount * 3); gMesh.instanceColor.needsUpdate = true; }
+  gMatDirty = gColDirty = false;
+}
+function resetDynamics() {
+  fCount = 0; fMesh.count = 0; gCount = 0; grindBudget = 0; physAcc = 0;
+  allocSand(cfg.maxGrains);
+}
+
+let last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0, statT = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.05) dt = 0.05;
+  fpsAcc += dt; fpsN++;
+
+  if (!dragging) {
+    if (Math.abs(spinX) + Math.abs(spinY) > 1e-3) { rotateBy(spinX * dt, spinY * dt); const d = Math.exp(-3.2 * dt); spinX *= d; spinY *= d; }
+    if (cfg.autoRotate) rotateBy(cfg.autoRotate * dt, 0);
+  }
+
+  physAcc += dt; let steps = 0;
+  while (physAcc >= DT && steps < 4) { physStep(); physAcc -= DT; steps++; }
+  if (steps === 4) physAcc = 0;
+  grindStep(dt);
+  grainStep(dt);
+  shift = (shift + cfg.beltSpeed * dt) % PER;
+  gearAng += (1.3 + gearBoost) * dt; gearBoost *= Math.exp(-2.5 * dt);
+
+  updateHover();
+  updateFallingMatrices(dt);
+  flushGlobe();
+  renderer.render(scene, cam);
+  draw2D();
+
+  if (!won && totalSolid && remaining === 0 && fCount === 0) { won = true; $('#win').hidden = false; }
+
+  statT += dt;
+  if (statT > 0.5) {
+    fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; statT = 0;
+    $('#stats').innerHTML =
+      `<span>FPS</span><span>${fps}</span>` +
+      `<span>Toplam voxel</span><span>${totalSolid.toLocaleString('tr-TR')}</span>` +
+      `<span>Çizilen (yüzey)</span><span>${visCount.toLocaleString('tr-TR')}</span>` +
+      `<span>Düşen voxel</span><span>${fCount}</span>` +
+      `<span>Kum taneciği</span><span>${(tCount + gCount).toLocaleString('tr-TR')}</span>`;
+  }
+}
+
+/* =========================================================
+   Editör
+   ========================================================= */
+const pctFmt = v => Math.round(v * 100) + '%';
+const SCHEMA = [
+  ['Şekil', [
+    { k: 'shape', t: 'select', l: 'Şekil', o: [['sphere', 'Gezegen'], ['cube', 'Küp'], ['diamond', 'Mücevher']], a: 'regen' },
+    { k: 'res', t: 'range', l: 'Çözünürlük', min: 12, max: 64, step: 1, a: 'regen', f: v => v + ' voxel' },
+    { k: 'seed', t: 'seed', l: 'Harita tohumu', a: 'regen' },
+    { k: 'terrain', t: 'check', l: 'Kara ve dağları yükselt', a: 'regen' }
+  ]],
+  ['Yüzey', [
+    { k: 'freq', t: 'range', l: 'Kıta ölçeği', min: 0.5, max: 4, step: 0.05, a: 'regen', f: v => (+v).toFixed(2) },
+    { k: 'deep', t: 'range', l: 'Derin su sınırı', min: 0, max: 1, step: 0.01, a: 'regen', f: pctFmt },
+    { k: 'sea', t: 'range', l: 'Deniz seviyesi', min: 0, max: 1, step: 0.01, a: 'regen', f: pctFmt },
+    { k: 'mount', t: 'range', l: 'Dağ sınırı', min: 0, max: 1, step: 0.01, a: 'regen', f: pctFmt },
+    { k: 'ice', t: 'range', l: 'Kutup buzu başlangıcı', min: 0.4, max: 1.1, step: 0.01, a: 'regen', f: pctFmt },
+    { k: 'biomeDepth', t: 'range', l: 'Yüzey kalınlığı', min: 1, max: 4, step: 1, a: 'regen', f: v => v + ' voxel' }
+  ]],
+  ['Yüzey renkleri', [
+    { k: 'cDeep', t: 'color', l: 'Derin su', a: 'color' },
+    { k: 'cShallow', t: 'color', l: 'Sığ su', a: 'color' },
+    { k: 'cLand', t: 'color', l: 'Kara', a: 'color' },
+    { k: 'cMount', t: 'color', l: 'Dağ', a: 'color' },
+    { k: 'cIce', t: 'color', l: 'Buz', a: 'color' }
+  ]],
+  ['İç katmanlar', 'layers'],
+  ['Oynanış', [
+    { k: 'fillMode', t: 'select', l: 'Dökülme', o: [['surface', 'Görünen yüzey bölgesi'], ['all', 'Bağlı tüm aynı renk']] },
+    { k: 'maxCluster', t: 'range', l: 'Bir dokunuşta en fazla', min: 0, max: 3000, step: 10, f: v => +v ? v + ' voxel' : 'sınırsız' },
+    { k: 'grindRate', t: 'range', l: 'Öğütme hızı', min: 10, max: 500, step: 5, f: v => v + ' /sn' },
+    { k: 'grainsPerVoxel', t: 'range', l: 'Voxel başına kum', min: 1, max: 16, step: 1 },
+    { k: 'maxGrains', t: 'range', l: 'Bant kapasitesi', min: 5000, max: 80000, step: 1000, a: 'sand', f: v => (+v).toLocaleString('tr-TR') },
+    { k: 'beltSpeed', t: 'range', l: 'Bant hızı', min: 0, max: 500, step: 5 },
+    { k: 'autoRotate', t: 'range', l: 'Kendi kendine dönüş', min: 0, max: 1.5, step: 0.05, f: v => (+v).toFixed(2) }
+  ]]
+];
+
+let regenTimer = 0;
+function scheduleRegen() { clearTimeout(regenTimer); regenTimer = setTimeout(generate, 140); }
+function apply(a) {
+  saveCfg();
+  if (a === 'regen') scheduleRegen();
+  else if (a === 'color') recolor();
+  else if (a === 'sand') allocSand(cfg.maxGrains);
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function makeControl(it) {
+  const id = 'c_' + it.k;
+  if (it.t === 'check') {
+    const lab = el('label', 'check'); const inp = el('input'); inp.type = 'checkbox'; inp.id = id; inp.checked = !!cfg[it.k];
+    inp.addEventListener('change', () => { cfg[it.k] = inp.checked; apply(it.a); });
+    lab.append(inp, document.createTextNode(it.l)); return lab;
+  }
+  const wrap = el('div', 'ctl');
+  const lab = el('label', 'lab', it.l); lab.htmlFor = id; wrap.append(lab);
+  if (it.t === 'range') {
+    const out = el('output'); const inp = el('input'); inp.type = 'range'; inp.id = id;
+    inp.min = it.min; inp.max = it.max; inp.step = it.step; inp.value = cfg[it.k];
+    const fmt = it.f || (v => v);
+    out.textContent = fmt(cfg[it.k]);
+    inp.addEventListener('input', () => { cfg[it.k] = +inp.value; out.textContent = fmt(cfg[it.k]); apply(it.a); });
+    wrap.append(out, inp);
+  } else if (it.t === 'select') {
+    const sel = el('select'); sel.id = id;
+    it.o.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.append(o); });
+    sel.value = cfg[it.k];
+    sel.addEventListener('change', () => { cfg[it.k] = sel.value; apply(it.a); });
+    wrap.append(sel);
+  } else if (it.t === 'color') {
+    const inp = el('input'); inp.type = 'color'; inp.id = id; inp.value = cfg[it.k];
+    inp.addEventListener('input', () => { cfg[it.k] = inp.value; apply(it.a); });
+    wrap.append(inp);
+  } else if (it.t === 'seed') {
+    const box = el('div', 'seed'); const inp = el('input'); inp.type = 'number'; inp.id = id; inp.value = cfg[it.k];
+    const dice = el('button', null, 'Rastgele'); dice.type = 'button';
+    inp.addEventListener('change', () => { cfg[it.k] = inp.value | 0; apply(it.a); });
+    dice.addEventListener('click', () => { cfg[it.k] = (Math.random() * 99999) | 0; inp.value = cfg[it.k]; apply(it.a); });
+    box.append(inp, dice); wrap.append(box);
+  }
+  return wrap;
+}
+let layersBox = null;
+function renderLayers() {
+  layersBox.innerHTML = '';
+  cfg.layers.forEach((L, idx) => {
+    const row = el('div', 'layer');
+    const col = el('input'); col.type = 'color'; col.value = L.c; col.setAttribute('aria-label', L.n + ' rengi');
+    col.addEventListener('input', () => { L.c = col.value; apply('color'); });
+    const name = el('input'); name.type = 'text'; name.value = L.n; name.setAttribute('aria-label', 'Katman adı');
+    name.addEventListener('change', () => { L.n = name.value; saveCfg(); });
+    const th = el('input'); th.type = 'number'; th.min = 1; th.max = 40; th.value = L.t;
+    th.setAttribute('aria-label', 'Kalınlık (voxel)');
+    if (idx === cfg.layers.length - 1) { th.disabled = true; th.title = 'Son katman merkezi doldurur'; }
+    th.addEventListener('change', () => { L.t = Math.max(1, th.value | 0); apply('regen'); });
+    const del = el('button', null, '×'); del.type = 'button'; del.setAttribute('aria-label', L.n + ' katmanını sil');
+    del.disabled = cfg.layers.length <= 1;
+    del.addEventListener('click', () => { cfg.layers.splice(idx, 1); renderLayers(); apply('regen'); });
+    row.append(col, name, th, del); layersBox.append(row);
+  });
+}
+function buildEditor() {
+  const root = $('#controls'); root.innerHTML = '';
+  for (const [title, items] of SCHEMA) {
+    const sec = el('section', 'sec'); sec.append(el('h2', null, title));
+    if (items === 'layers') {
+      sec.append(el('p', 'note', 'Yüzeyin altından merkeze doğru. Kalınlık voxel cinsinden; son katman merkezi doldurur.'));
+      layersBox = el('div'); sec.append(layersBox); renderLayers();
+      const add = el('button', null, 'Katman ekle'); add.type = 'button';
+      add.addEventListener('click', () => {
+        if (cfg.layers.length >= 12) return;
+        const hue = (Math.random() * 360) | 0;
+        cfg.layers.splice(Math.max(0, cfg.layers.length - 1), 0, { n: 'Yeni katman', c: `hsl(${hue},75%,55%)`, t: 2 });
+        const c = new THREE.Color(cfg.layers[Math.max(0, cfg.layers.length - 2)].c);
+        cfg.layers[Math.max(0, cfg.layers.length - 2)].c = '#' + c.getHexString();
+        renderLayers(); apply('regen');
+      });
+      const wrap = el('div', 'actions'); wrap.append(add); sec.append(wrap);
+    } else items.forEach(it => sec.append(makeControl(it)));
+    root.append(sec);
+  }
+  $('#json').value = JSON.stringify(cfg, null, 1);
+}
+
+$('#btnRestart').addEventListener('click', generate);
+$('#btnAgain').addEventListener('click', generate);
+$('#btnDefaults').addEventListener('click', () => { cfg = clone(DEFAULT); saveCfg(); buildEditor(); generate(); });
+$('#btnExport').addEventListener('click', async () => {
+  const txt = JSON.stringify(cfg, null, 1); $('#json').value = txt;
+  try { await navigator.clipboard.writeText(txt); $('#jsonNote').textContent = 'Seviye JSON\u2019u panoya kopyalandı.'; }
+  catch (e) { $('#json').select(); $('#jsonNote').textContent = 'Metin seçildi; kopyalamak için Ctrl/Cmd+C kullan.'; }
+});
+$('#btnImport').addEventListener('click', () => {
+  try {
+    const obj = JSON.parse($('#json').value);
+    if (typeof obj !== 'object' || !obj) throw new Error();
+    cfg = Object.assign(clone(DEFAULT), obj);
+    if (!Array.isArray(cfg.layers) || !cfg.layers.length) cfg.layers = clone(DEFAULT.layers);
+    saveCfg(); buildEditor(); generate();
+    $('#jsonNote').textContent = 'Seviye yüklendi.';
+  } catch (e) { $('#jsonNote').textContent = 'JSON okunamadı. Metnin süslü parantezle başlayıp bittiğini kontrol et.'; }
+});
+window.addEventListener('keydown', e => {
+  if ((e.key === 'r' || e.key === 'R') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) generate();
+});
+
+buildEditor();
+resize();
+generate();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
